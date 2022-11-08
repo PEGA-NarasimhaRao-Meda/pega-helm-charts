@@ -37,7 +37,7 @@ entries:
     digest: 41d51f0b82ba5277877e15509f586b675b4e5cfc98e3e5ed997cf6503fa8a88a
     name: addons
     urls:
-    - https://pegasystems.github.io/pega-helm-charts/addons-3.7.0.tgz
+    - https://PEGA-NarasimhaRao-Meda.github.io/pega-helm-charts/addons-3.7.0.tgz
     version: 3.7.0
   - apiVersion: v1
     appVersion: "1.0"
@@ -1925,7 +1925,7 @@ entries:
     name: backingservices
     type: application
     urls:
-    - https://pegasystems.github.io/pega-helm-charts/backingservices-3.7.0.tgz
+    - https://PEGA-NarasimhaRao-Meda.github.io/pega-helm-charts/backingservices-3.7.0.tgz
     version: 3.7.0
   - apiVersion: v1
     created: "2022-10-13T19:17:24.933519289Z"
@@ -2431,7 +2431,7 @@ entries:
     - kubernetes
     name: pega
     urls:
-    - https://pegasystems.github.io/pega-helm-charts/pega-3.7.0.tgz
+    - https://PEGA-NarasimhaRao-Meda.github.io/pega-helm-charts/pega-3.7.0.tgz
     version: 3.7.0
   - apiVersion: v1
     created: "2022-10-13T19:17:25.236454871Z"
