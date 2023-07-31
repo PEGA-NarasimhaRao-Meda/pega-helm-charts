@@ -1,14 +1,14 @@
-{{ if and (eq (include "performDeployment" .) "true") (eq (include "isHazelcastEnabled" .) "true") }}
+{{ if (eq (include "isClusteringServiceEnabled" .) "true") }}
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: {{ template "hazelcastEnvironmentConfig" }}
+  name: {{ template "clusteringServiceEnvironmentConfig" }}
   namespace: {{ .Release.Namespace }}
 data:
   # Key Value pairs
   NAMESPACE: {{ .Release.Namespace }}
   JAVA_OPTS: {{ .Values.server.java_opts | quote }}
-  SERVICE_NAME: {{ template "hazelcastName" }}-service
+  SERVICE_NAME: {{ template "clusteringServiceName" . }}-service
   MIN_CLUSTER_SIZE: {{ .Values.replicas | quote }}
 {{- if .Values.server.jmx_enabled }}
   JMX_ENABLED: {{ .Values.server.jmx_enabled | quote }}
@@ -32,7 +32,7 @@ data:
   MAX_JOIN_SECONDS: {{ .Values.server.max_join_seconds | quote }}
 {{- end }}
 {{- if .Values.server.group_name }}
-  GROUP_NAME: {{ .Values.server.group_name | quote }}
+  GROUP_NAME: {{ .Values.server.clustering_service_group_name | quote }}
 {{- end }}
 {{- if .Values.server.mancenter_url }}
   MANCENTER_URL: {{ .Values.server.mancenter_url | quote }}

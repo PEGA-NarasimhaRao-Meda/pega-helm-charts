@@ -1086,7 +1086,7 @@ Pega Infinity version   | Clustering Service version    |    Description
 
 #### Configuration Settings
 The values.yaml provides configuration options to define the deployment of Hazelcast. Apart from the below parameters when `hazelcast.enabled` is set to `true`, additional parameters are required for client-server deployment which have been documented
-here: [Additional Parameters](charts/hazelcast/README.md)
+here: [Additional Parameters](../hazelcast/README.md)
 
 Parameter   | Description   | Default value
 ---         | ---           | ---

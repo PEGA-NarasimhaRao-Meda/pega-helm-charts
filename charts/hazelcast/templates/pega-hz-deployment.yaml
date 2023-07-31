@@ -1,4 +1,4 @@
-{{ if and (eq (include "performDeployment" .) "true") (eq (include "isHazelcastEnabled" .) "true") }}
+{{ if (eq (include "isHazelcastEnabled" .) "true") }}
 kind: StatefulSet
 apiVersion: apps/v1
 metadata:
@@ -68,5 +68,5 @@ spec:
       # Volume used to mount  secrets
       {{- include "hazelcastVolumeTemplate" . | indent 6 }}
       imagePullSecrets:
-{{- include "imagePullSecrets" . | indent 6 }}
+      - name: {{ template "pegaRegistrySecret" $ }}
 {{ end }}

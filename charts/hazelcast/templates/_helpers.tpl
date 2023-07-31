@@ -38,18 +38,6 @@
     sources:
     - secret:
         name: {{ template "pegaCredentialsSecret" $ }}
-  {{ if ((.Values.global.jdbc).external_secret_name) }}
-    - secret:
-        name: {{ .Values.global.jdbc.external_secret_name }}
-  {{- end }}
-  {{ if (.Values.external_secret_name)}}
-    - secret:
-        name: {{ .Values.external_secret_name }}
-  {{- end }}
-  {{ if ((.Values.global.customArtifactory.authentication).external_secret_name) }}
-    - secret:
-        name: {{ .Values.global.customArtifactory.authentication.external_secret_name }}
-  {{- end }}
 {{- end}}
 
 
@@ -77,7 +65,11 @@
 {{- define "generatedClusteringServicePodLabels" }}
 {{- end }}
 
+{{- define "imagePullSecret" }}
+{{- printf "{\"auths\": {\"%s\": {\"auth\": \"%s\"}}}" .Values.url (printf "%s:%s" .Values.dockerUsername .Values.dockerPassword | b64enc) | b64enc }}
+{{- end }}
 
+{*
 {{- define "performDeployment" }}
   {{- if or (eq .Values.global.actions.execute "deploy") (eq .Values.global.actions.execute "install-deploy") (eq .Values.global.actions.execute "upgrade-deploy") -}}
     true
@@ -85,3 +77,4 @@
     false
   {{- end -}}
 {{- end }}
+*}

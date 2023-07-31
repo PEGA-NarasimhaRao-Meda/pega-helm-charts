@@ -1,15 +1,15 @@
 ---
-image: "YOUR_HAZELCAST_IMAGE:TAG"
-clusteringServiceImage: "YOUR_CLUSTERING_SERVICE_IMAGE:TAG"
+image: "narasimharaomeda/clustering-service:1.0.4"
+clusteringServiceImage: "narasimharaomeda/clustering-service:1.3.2"
 imagePullPolicy: "Always"
 # Enter the number of initial members in Hazelcast cluster.
 replicas: 3
 # Setting below to true will deploy the Pega Platform in client-server Hazelcast model for version 8.6 through 8.7.x.
 # Note: Make sure to set this value as "false" in case of Pega platform version before "8.6". If not set this will fail the installation.
-enabled: true
+enabled: false
 # Setting below to true will deploy the Pega Platform in client-server Hazelcast model for version 8.8 and later.
 # Note: Make sure to set this value as "false" in case of Pega platform version before "8.8". If not set this will fail the installation.
-clusteringServiceEnabled: false
+clusteringServiceEnabled: true
 
 # Setting related to Hazelcast migration.
 migration:
@@ -20,10 +20,13 @@ migration:
   # Set to `true` when migrating from embedded Hazelcast.
   embeddedToCSMigration: false
 
+url: "hub.docker.com"
+dockerUsername: "narasimharaomeda"
+dockerPassword: "Mnrjr@14"
 # username to be used in client-server Hazelcast model for authentication.
-username: ""
+username: "hazelcast"
 # password to be used in client-server Hazelcast model for authentication.
-password: ""
+password: "Mnrjr@14"
 
 # Memory and CPU settings for HZ service
 resources:

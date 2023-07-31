@@ -1,4 +1,4 @@
-{{ if and (and (eq (include "performDeployment" .) "true") (eq (include "isMigrationInit" .) "true"))
+{{ if and (eq (include "isMigrationInit" .) "true")
    (eq (include "isClusteringServiceEnabled" .) "true") }}
 ---
 apiVersion: batch/v1

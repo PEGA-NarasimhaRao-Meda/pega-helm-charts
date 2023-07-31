@@ -1,4 +1,4 @@
-{{ if and (eq (include "performDeployment" .) "true") (eq (include "isClusteringServiceEnabled" .) "true") }}
+{{ if (eq (include "isClusteringServiceEnabled" .) "true") }}
 kind: Service
 apiVersion: v1
 metadata:
