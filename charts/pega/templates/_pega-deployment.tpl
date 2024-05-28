@@ -50,6 +50,7 @@ spec:
         app: {{ .name }}
 {{- if .node.podLabels }}
 {{ toYaml .node.podLabels | indent 8 }}
+{{- include "generatedPodLabels" .root | indent 8 }}
 {{- end }}
       annotations:
 {{- if .node.podAnnotations }}
@@ -88,6 +89,9 @@ spec:
 {{- $data := dict "root" .root "node" .node }}
 {{- include "pegaVolumeTomcatKeystoreTemplate" $data | indent 6 }}
 {{ end }}
+{{- if .root.Values.global.kerberos }}
+{{- include "pegaKerberosVolumeTemplate" .root | indent 6 }}
+{{- end }}
 {{- if .custom }}
 {{- if .custom.volumes }}
       # Additional custom volumes
@@ -110,12 +114,25 @@ spec:
 {{- end }}
 {{- if (ne .root.Values.global.provider "openshift") }}
       securityContext:
-        fsGroup: 0
 {{- if .node.securityContext }}
+{{- if .node.securityContext.runAsUser }}
         runAsUser: {{ .node.securityContext.runAsUser }}
 {{- else }}
         runAsUser: 9001
 {{- end }}
+{{- if .node.securityContext.fsGroup }}
+        fsGroup: {{ .node.securityContext.fsGroup }}
+{{- else }}
+        fsGroup: 0
+{{- end }}
+{{- else }}
+        runAsUser: 9001
+        fsGroup: 0
+{{- end }}
+{{- end }}
+{{- if .node.topologySpreadConstraints }}
+      topologySpreadConstraints:
+{{ toYaml .node.topologySpreadConstraints | indent 8 }}
 {{- end }}
       containers:
       # Name of the container
@@ -130,6 +147,8 @@ spec:
         ports:
         - containerPort: 8080
           name: pega-web-port
+        - containerPort: 8443
+          name: pega-tls-port
 {{- if .custom }}
 {{- if .custom.ports }}
         # Additional custom ports
@@ -158,6 +177,12 @@ spec:
         - name: COSMOS_SETTINGS
           value: "Pega-UIEngine/cosmosservicesURI=/c11n"
 {{- end }}
+{{- if ((.node.service).tls).enabled }}
+        - name: EXTERNAL_KEYSTORE_NAME
+          value: "{{ (((.node.service).tls).external_keystore_name) }}"
+        - name: EXTERNAL_KEYSTORE_PASSWORD
+          value: "{{ (((.node.service).tls).external_keystore_password) }}"
+{{- end }}
 {{- if .custom }}
 {{- if .custom.env }}
         # Additional custom env vars
@@ -172,6 +197,13 @@ spec:
           value: {{ include "tierClassloaderRetryTimeout" (dict "failureThreshold" $livenessProbeFailureThreshold "periodSeconds" $livenessProbePeriodSeconds ) | quote }}
         - name: MAX_RETRIES
           value: {{ include "tierClassloaderMaxRetries" (dict "failureThreshold" $livenessProbeFailureThreshold "periodSeconds" $livenessProbePeriodSeconds ) | quote }}
+{{- if and (.root.Values.pegasearch.externalSearchService) ((.root.Values.pegasearch.srsAuth).enabled) }}
+        - name: SERV_AUTH_PRIVATE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pega-srs-auth-secret
+              key: privateKey
+{{- end }}
         envFrom:
         - configMapRef:
             name: {{ template "pegaEnvironmentConfig" .root }}
@@ -231,6 +263,10 @@ spec:
           mountPath: "/opt/pega/artifactory/cert"
 {{- end }}
 {{- end }}
+{{- if .root.Values.global.kerberos }}
+        - name: {{ template "pegaKerberosConfig" }}-config
+          mountPath: "/opt/pega/kerberos"
+{{- end }}
 
         # LivenessProbe: indicates whether the container is live, i.e. running.
         livenessProbe:
@@ -282,7 +318,7 @@ spec:
       # Secret which is used to pull the image from the repository.  This secret contains docker login details for the particular user.
       # If the image is in a protected registry, you must specify a secret to access it.
       imagePullSecrets:
-      - name: {{ template "pegaRegistrySecret" .root }}
+{{- include "imagePullSecrets" .root | indent 6 }}
 {{- if (.node.volumeClaimTemplate) }}
   volumeClaimTemplates:
   - metadata:
@@ -294,6 +330,9 @@ spec:
       resources:
         requests:
           storage: {{ .node.volumeClaimTemplate.resources.requests.storage }}
+{{- if ( .root.Values.global.storageClassName ) }}
+      storageClassName: {{ .root.Values.global.storageClassName }}
+{{ end }}
   serviceName: {{ .name }}
 {{- end }}
 ---

@@ -166,33 +166,59 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "esDeploymentPassword" -}}
 {{- if and (.Values.srsStorage.tls.enabled) (not .Values.srsStorage.provisionInternalESCluster) (not .Values.srsStorage.basicAuthentication.enabled) (not .Values.srsStorage.awsIAM)}}
-{{- .Values.srsStorage.esCredentials.password  |  b64enc }}
+{{- .Values.srsStorage.esCredentials.password | b64enc }}
 {{- else if and (.Values.srsStorage.basicAuthentication.enabled) (not .Values.srsStorage.provisionInternalESCluster) (not .Values.srsStorage.tls.enabled) }}
-{{- .Values.srsStorage.esCredentials.password  |  b64enc }}
+{{- .Values.srsStorage.esCredentials.password | b64enc }}
 {{- else if and (.Values.srsStorage.provisionInternalESCluster) (not .Values.srsStorage.awsIAM) }}
+{{- $secret := (lookup "v1" "Secret" .Release.Namespace "srs-elastic-credentials") }}
+{{- if $secret }}
+{{- index $secret.data "password" }}
+{{- else}}
 {{- randAlphaNum 20 | b64enc}}
+{{- end -}}
 {{- end}}
 {{- end}}
 
+{{- define "oAuthPublicKeyUrl" -}}
+{{- if .Values.srsRuntime.env.AuthEnabled }}
+    {{- if .Values.srsRuntime.env.OAuthPublicKeyURL }}
+    {{- .Values.srsRuntime.env.OAuthPublicKeyURL | quote }}
+    {{- else }}
+    {{- fail "A valid entry is required for srsRuntime.env.OAuthPublicKeyURL, when request authentication mechanism(IDP) in place between SRS and Pega Infinity i.e. srsRuntime.env.AuthEnabled is true " | quote}}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{/*
-Network policy: kube-dns
+Network policy: `openshift-dns` for openshift cluster, `kube-dns | core-dns` for other supported providers.
 */}}
-{{- define "srs.netpol.kube-dns" -}}
-- namespaceSelector:
-    matchLabels:
-      name: kube-system
-- podSelector:
-    matchExpressions:
-      - key: k8s-app
-        operator: In
-        values: ["kube-dns", "coredns"]
-ports:
-- protocol: TCP
-  port: 53
-- protocol: TCP
-  port: 1053
-- protocol: TCP
-  port: 80
-- protocol: TCP
-  port: 8080
+{{- define "srs.dns" -}}
+{{ if eq .Values.global.k8sProvider "openshift" }}
+- to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-dns
+  ports:
+    - protocol: UDP
+      port: 5353
+{{ else }}
+- to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector:
+        matchExpressions:
+          - key: k8s-app
+            operator: In
+            values: ["kube-dns", "coredns"]
+  ports:
+    - protocol: TCP
+      port: 53
+    - protocol: TCP
+      port: 1053
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 8080
+{{- end -}}
 {{- end -}}

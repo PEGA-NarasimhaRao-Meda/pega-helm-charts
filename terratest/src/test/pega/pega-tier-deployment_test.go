@@ -38,6 +38,7 @@ func TestPegaTierDeployment(t *testing.T) {
 						"global.actions.execute":        operation,
 						"global.deployment.name":        depName,
 						"installer.upgrade.upgradeType": "zero-downtime",
+						"global.storageClassName":       "storage-class",
 					},
 				}
 
@@ -46,8 +47,55 @@ func TestPegaTierDeployment(t *testing.T) {
 				assertWeb(t, yamlSplit[1], options)
 				assertBatch(t, yamlSplit[2], options)
 				assertStream(t, yamlSplit[3], options)
+				assertStreamWithSorageClass(t, yamlSplit[3], options)
 
 			}
+		}
+	}
+}
+
+func assertStreamWithSorageClass(t *testing.T, streamYaml string, options *helm.Options) {
+	var statefulsetObj appsv1beta2.StatefulSet
+	UnmarshalK8SYaml(t, streamYaml, &statefulsetObj)
+	require.Equal(t, statefulsetObj.ObjectMeta.Name, getObjName(options, "-stream"))
+	storageClassName := "storage-class"
+	require.Equal(t, &storageClassName, statefulsetObj.Spec.VolumeClaimTemplates[0].Spec.StorageClassName)
+}
+
+func TestPegaTierDeploymentWithFSGroup(t *testing.T) {
+	var supportedVendors = []string{"k8s", "eks", "gke", "aks", "pks"}
+	customFsGroups := map[string]int64{
+		"1000": 1000,
+		"2000": 2000,
+		"3000": 3000,
+	}
+	helmChartPath, err := filepath.Abs(PegaHelmChartPath)
+	require.NoError(t, err)
+
+	var depObj appsv1.Deployment
+
+	for _, vendor := range supportedVendors {
+		for key, value := range customFsGroups {
+			var options = &helm.Options{
+				SetValues: map[string]string{
+					"global.provider":                        vendor,
+					"global.actions.execute":                 "deploy",
+					"global.deployment.name":                 "pega",
+					"installer.upgrade.upgradeType":          "zero-downtime",
+					"global.tier[0].name":                    "web",
+					"global.tier[1].name":                    "batch",
+					"global.tier[2].name":                    "stream",
+					"global.tier[0].securityContext.fsGroup": key, // web tier
+					"global.tier[1].securityContext.fsGroup": key, // batch tier
+					"global.tier[2].securityContext.fsGroup": key, // stream tier
+				},
+			}
+
+			yamlContent := RenderTemplate(t, options, helmChartPath, []string{"templates/pega-tier-deployment.yaml"})
+			yamlSplit := strings.Split(yamlContent, "---")
+
+			UnmarshalK8SYaml(t, yamlSplit[1], &depObj)
+			require.Equal(t, value, *depObj.Spec.Template.Spec.SecurityContext.FSGroup)
 		}
 	}
 }
@@ -110,7 +158,6 @@ func VerifyDeployment(t *testing.T, pod *k8score.PodSpec, expectedSpec pegaDeplo
 	require.Equal(t, expectedSpec.name, pod.Volumes[0].VolumeSource.ConfigMap.LocalObjectReference.Name)
 	require.Equal(t, volumeDefaultModePtr, pod.Volumes[0].VolumeSource.ConfigMap.DefaultMode)
 	require.Equal(t, "pega-volume-credentials", pod.Volumes[1].Name)
-	require.Equal(t, getObjName(options, "-credentials-secret"), pod.Volumes[1].VolumeSource.Projected.Sources[0].Secret.Name)
 	require.Equal(t, volumeDefaultModePtr, pod.Volumes[1].VolumeSource.Projected.DefaultMode)
 
 	actualInitContainers := pod.InitContainers
@@ -119,13 +166,14 @@ func VerifyDeployment(t *testing.T, pod *k8score.PodSpec, expectedSpec pegaDeplo
 	for i := 0; i < count; i++ {
 		actualInitContainerNames[i] = actualInitContainers[i].Name
 	}
-
 	//require.Equal(t, expectedSpec.initContainers, actualInitContainerNames) NEED TO CHANGE FOR "install-deploy"
 	VerifyInitContainerData(t, actualInitContainers, options)
 	require.Equal(t, "pega-web-tomcat", pod.Containers[0].Name)
 	require.Equal(t, "pegasystems/pega", pod.Containers[0].Image)
 	require.Equal(t, "pega-web-port", pod.Containers[0].Ports[0].Name)
 	require.Equal(t, int32(8080), pod.Containers[0].Ports[0].ContainerPort)
+	require.Equal(t, "pega-tls-port", pod.Containers[0].Ports[1].Name)
+	require.Equal(t, int32(8443), pod.Containers[0].Ports[1].ContainerPort)
 	var envIndex int32 = 0
 	require.Equal(t, "NODE_TYPE", pod.Containers[0].Env[envIndex].Name)
 	require.Equal(t, expectedSpec.nodeType, pod.Containers[0].Env[envIndex].Value)
@@ -142,6 +190,14 @@ func VerifyDeployment(t *testing.T, pod *k8score.PodSpec, expectedSpec pegaDeplo
 		require.Equal(t, "COSMOS_SETTINGS", pod.Containers[0].Env[envIndex].Name)
 		require.Equal(t, "Pega-UIEngine/cosmosservicesURI=/c11n", pod.Containers[0].Env[envIndex].Value)
 	}
+	if options.ValuesFiles != nil && expectedSpec.name == getObjName(options, "-web") && options.SetStrValues["service.tls.enabled"] == "true" {
+		envIndex++
+		require.Equal(t, "EXTERNAL_KEYSTORE_NAME", pod.Containers[0].Env[envIndex].Name)
+		require.Equal(t, "EXTERNAL_KEYSTORE_NAME", pod.Containers[0].Env[envIndex].Value)
+		envIndex++
+		require.Equal(t, "EXTERNAL_KEYSTORE_PASSWORD", pod.Containers[0].Env[envIndex].Name)
+		require.Equal(t, "EXTERNAL_KEYSTORE_PASSWORD", pod.Containers[0].Env[envIndex].Value)
+	}
 	envIndex++
 	require.Equal(t, "JAVA_OPTS", pod.Containers[0].Env[envIndex].Name)
 	require.Equal(t, "", pod.Containers[0].Env[envIndex].Value)
@@ -150,7 +206,7 @@ func VerifyDeployment(t *testing.T, pod *k8score.PodSpec, expectedSpec pegaDeplo
 	require.Equal(t, "", pod.Containers[0].Env[envIndex].Value)
 	envIndex++
 	require.Equal(t, "INITIAL_HEAP", pod.Containers[0].Env[envIndex].Name)
-	require.Equal(t, "4096m", pod.Containers[0].Env[envIndex].Value)
+	require.Equal(t, "8192m", pod.Containers[0].Env[envIndex].Value)
 	envIndex++
 	require.Equal(t, "MAX_HEAP", pod.Containers[0].Env[envIndex].Name)
 	require.Equal(t, "8192m", pod.Containers[0].Env[envIndex].Value)
@@ -199,7 +255,6 @@ func VerifyDeployment(t *testing.T, pod *k8score.PodSpec, expectedSpec pegaDeplo
 	require.Equal(t, "/opt/pega/config", pod.Containers[0].VolumeMounts[0].MountPath)
 	require.Equal(t, "pega-volume-config", pod.Volumes[0].Name)
 	require.Equal(t, "pega-volume-credentials", pod.Volumes[1].Name)
-	require.Equal(t, getObjName(options, "-credentials-secret"), pod.Volumes[1].Projected.Sources[0].Secret.Name)
 
 }
 

@@ -2,12 +2,12 @@ name:  Pega Chart Build
 
 env:
   HELM_URL: https://get.helm.sh
-  HELM_TGZ: helm-v3.6.3-linux-amd64.tar.gz
-  YAMLLINT_VERSION: 1.15.0
-  GO_VERSION: 1.18.3
+  HELM_TGZ: helm-v3.11.3-linux-amd64.tar.gz
+  YAMLLINT_VERSION: 1.34.0
+  GO_VERSION: 1.21.6
 
 
-on: 
+on:
   push:
     tags:
       - '*'
@@ -22,8 +22,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  run-supplemental-validation-job:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Run validate supplementals script
+        run : |
+          sh validate_supplementals.sh
   run-lint-job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -32,13 +40,39 @@ jobs:
         run: |
           sudo pip install yamllint=="${{ env.YAMLLINT_VERSION }}"
 
+
+      - name: Install Helm
+        run: |
+          sudo rm /usr/local/bin/helm
+          wget -q ${{ env.HELM_URL }}/${{ env.HELM_TGZ }}
+          tar xzf ${{ env.HELM_TGZ }}
+          mv linux-amd64/helm /usr/local/bin/helm
+
       - name: run yamllint
         run: |
           yamllint -c .yamllint.yml -s $(find . -type f -name "Chart.yaml")
           yamllint -c .yamllint.yml -s $(find . -type f -name "values*.yaml")
 
+      - name: update helm dependencies
+        run: |
+          helm dependency update charts/addons
+          helm dependency update charts/backingservices
+          helm dependency update charts/pega
+
+      - name: run helm lint
+        run: |
+          sh helmlint.sh
+      
+      - name: Install xml lint
+        run: |
+          sudo apt-get update && sudo apt -y install libxml2-utils
+          
+      - name: run xml lint for deploy and installer xml files
+        run: |
+          sh validatexml.sh      
+
   run-remark-job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -47,7 +81,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: lts/*
-      
+
       - name: Install npm dependencies
         run: |    
           npm install -g --save remark-cli to-vfile remark-preset-lint-recommended remark-validate-links remark-lint-no-dead-urls remark-message-control remark-preset-lint-markdown-style-guide remark-lint
@@ -57,7 +91,7 @@ jobs:
           remark -i .remark_ignore -f -u validate-links .
 
   run-go-tests-job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -80,14 +114,14 @@ jobs:
       - name: Now load the helm dependencies
         run: |
           make dependencies
-          
+
       - name: Prepare for GO helm unit tests
         run: |
           mkdir $GITHUB_WORKSPACE/terratest/bin
           export GOPATH=$GITHUB_WORKSPACE/terratest
           export PATH=$PATH:$GITHUB_WORKSPACE/terratest/bin
           cd terratest/src/test
-      
+
       - name: run go tests on pega
         run: |
           export GOPATH=$GITHUB_WORKSPACE/terratest
@@ -110,7 +144,7 @@ jobs:
           go test ./backingservices | grep "FAIL" -A 8 || true ; test ${PIPESTATUS[0]} -eq 0
 
   run-deploy-job:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [run-lint-job, run-remark-job, run-go-tests-job]
     if: ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') ) &&  success()
     steps:
@@ -120,7 +154,7 @@ jobs:
           tar xzf ${{ env.HELM_TGZ }}
           ls -l
           mv linux-amd64/helm /usr/local/bin/helm
-          
+
       - name: Checkout code
         uses: actions/checkout@v3
 
@@ -157,5 +191,13 @@ jobs:
           cd $GITHUB_WORKSPACE
           chmod 777 update_gh_pages.sh
           ./update_gh_pages.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_ACTIONS_SECRET }}
+
+      - name: sync chart version
+        run: |
+          cd $GITHUB_WORKSPACE
+          chmod 777 sync_chart_version.sh
+          ./sync_chart_version.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GH_ACTIONS_SECRET }}

@@ -36,8 +36,17 @@ data:
 {{- if .Values.upgrade.upgradeSteps }}
   UPGRADE_STEP: {{ .Values.upgrade.upgradeSteps }}
 {{- end }}
+  PEGA_REST_SERVER_URL: {{ include "pegaRestURL" $ | quote }}
+{{- if .Values.upgrade.pegaRESTUsername }}
+  PEGA_REST_USERNAME: {{ .Values.upgrade.pegaRESTUsername }}
+{{- end }}
+{{- if .Values.upgrade.pegaRESTPassword }}
+  PEGA_REST_PASSWORD: {{ .Values.upgrade.pegaRESTPassword }}
+{{- end }}
   # Whether this is a Multitenant System ('true' if yes, 'false' if no)
-  MULTITENANT_SYSTEM: {{ .Values.multitenantSystem | quote}}
+{{- if .Values.multitenant_system }}
+  MT_SYSTEM: {{ .Values.multitenant_system | quote}}
+{{- end }}
   # UDF generation will be skipped if this property is set to true
   BYPASS_UDF_GENERATION: {{ .Values.bypassUdfGeneration | quote}}
   # Z/OS SITE-SPECIFIC PROPERTIES FILE
@@ -68,6 +77,8 @@ data:
   RUN_RULESET_CLEANUP: {{ .Values.upgrade.runRulesetCleanup | quote }}
   # Rebuild Database Rules Indexes after Rules Load to improve Database Access Performance
   REBUILD_INDEXES:  {{ .Values.upgrade.rebuildIndexes | quote }}
+  # Automatic resume parameter to support resuming rules_upgrade from point of failure
+  AUTOMATIC_RESUME_ENABLED: {{ .Values.upgrade.automaticResumeEnabled | quote }}
 {{- if .Values.distributionKitURL }}
   # Distribution kit URL
   DISTRIBUTION_KIT_URL: {{ .Values.distributionKitURL }}
